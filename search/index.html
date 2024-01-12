@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Search for domain(s) in list(s)</title>
+    <link rel="stylesheet" href="https://cdn.simplecss.org/simple.min.css" />
+    <style>
+      body {
+        background-color: #f9f9f9;
+      }
+
+      #container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      input[type="text"],
+      select {
+        padding: 5px;
+        font-size: 18px;
+        width: 100%;
+      }
+
+      button {
+        padding: 10px 20px;
+        font-size: 18px;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+
+      pre {
+        padding: 5px;
+        background-color: #fff;
+        width: 80%;
+        max-width: 500px;
+        max-height: 350px;
+        overflow-y: scroll;
+        display: none;
+      }
+
+      fieldset {
+        width: 100%;
+        max-width: 500px;
+      }
+
+      fieldset > legend {
+        font-weight: 700;
+      }
+
+      @media (max-width: 500px) {
+        input[type="text"],
+        select {
+          width: 100%;
+          font-size: 16px;
+        }
+        button {
+          font-size: 16px;
+        }
+        pre {
+          width: 100%;
+          font-size: 14px;
+        }
+      }
+    </style>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+  </head>
+  <body>
+    <main id="container">
+      <p class="notice">Explore domains directly within designated lists. <strong>All searches occur within your browser, ensuring no logging of data.</strong> The code exclusively employs CDN for <a href="https://simplecss.org/" target="_blank" title="Opens simplecss.org in a new tab">Simple.css</a> and <a href="https://releases.jquery.com" target="_blank" title="Opens releases.jquery.com in a new tab">jQuery</a>. {{ <a href="https://gist.github.com/CodeAlDente/ee033860b0963b34ed107e95102870f7" target="_blank" title="Opens gist.github.com in a new tab">Source code hosted at GitHub Gist</a> }}</p>
+      <fieldset>
+        <legend>Where?</legend>
+        <select id="list">
+          <optgroup label="Bon-Appetit/porn-domains/">
+            <option value="https://raw.githubusercontent.com/Bon-Appetit/porn-domains/master/block.txt" selected="selected">block.txt</option>
+          </optgroup>
+        </select>
+      </fieldset>
+      <fieldset>
+        <legend>What?</legend>
+        <input type="text" id="phrase" placeholder="foobar.com" />
+      </fieldset>
+      <fieldset>
+        <legend>Options</legend>
+        <label><input type="checkbox" id="regex" /> Use regular expression</label>
+      </fieldset>
+      <button id="searchButton" onclick="search()">Search</button>
+      <pre id="result"></pre>
+      <p id="count"></p>
+    </main>
+
+    <script>
+      var cache = {};
+
+      function fetchData(url) {
+        return new Promise(function (resolve, reject) {
+          if (cache[url] && cache[url].timestamp > Date.now() - 60000) {
+            resolve(cache[url].data);
+          } else {
+            $.ajax({
+              url: url,
+              type: "GET",
+              success: function (data) {
+                cache[url] = {
+                  timestamp: Date.now(),
+                  data: data,
+                };
+                resolve(data);
+              },
+              error: function (error) {
+                reject(error);
+              },
+            });
+          }
+        });
+      }
+
+      function sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      async function search() {
+        var searchButton = $("#searchButton");
+        var resultContainer = $("#result");
+        var countContainer = $("#count");
+
+        searchButton.prop("disabled", true);
+        searchButton.html("Searching...");
+        resultContainer.hide();
+        countContainer.hide();
+
+        await sleep(500);
+
+        var phrase = $("#phrase").val();
+        var isRegex = $("#regex").prop("checked");
+        var sources = $("#list").val().split(",");
+        resultContainer.html("");
+        countContainer.html("");
+
+        if (phrase !== "") {
+          var completedRequests = 0;
+          var allMatches = [];
+          var totalCount = 0;
+
+          try {
+            var responses = await Promise.all(sources.map(fetchData));
+
+            responses.forEach(function (responseText) {
+              var lines = responseText.split("\n");
+              var matches = [];
+              var count = 0;
+              for (var s = 0; s < lines.length; s++) {
+                if (isRegex ? new RegExp(phrase, "i").test(lines[s]) : lines[s].toLowerCase().includes(phrase.toLowerCase())) {
+                  matches.push(lines[s]);
+                  count++;
+                  totalCount++;
+                }
+              }
+              allMatches = allMatches.concat(matches);
+            });
+
+            if (allMatches.length > 0) {
+              resultContainer.show();
+              resultContainer.html(allMatches.join("<br>"));
+              var plural = totalCount === 1 ? "match" : "matches";
+              countContainer.html("<mark>" + totalCount + " " + plural + "</mark> found");
+            } else {
+              resultContainer.hide();
+              countContainer.html("No matches found");
+            }
+            countContainer.show();
+          } catch (error) {
+            console.error("Error fetching data:", error);
+          } finally {
+            searchButton.prop("disabled", false);
+            searchButton.html("Search");
+          }
+        } else {
+          resultContainer.hide();
+          countContainer.html("<span style='color:red'>Please enter a phrase</span>");
+          countContainer.show();
+          searchButton.prop("disabled", false);
+          searchButton.html("Search");
+        }
+      }
+
+      $(document).ready(function () {
+        $("#searchButton").on("click", search);
+      });
+    </script>
+  </body>
+</html>
